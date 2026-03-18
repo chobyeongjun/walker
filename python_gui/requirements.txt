@@ -1,0 +1,17 @@
+# ARWalker GUI Dependencies
+# Python 3.9+ recommended
+
+# Core GUI Framework (PyQt5 - fastest for real-time applications)
+PyQt5>=5.15.0
+
+# High-Performance Real-Time Plotting (10-100x faster than matplotlib)
+pyqtgraph>=0.13.0
+
+# BLE Communication (Nordic UART Service)
+bleak>=0.21.0
+
+# Numerical operations
+numpy>=1.21.0
+
+# Optional: Camera support (uncomment when needed)
+# opencv-python>=4.8.0
