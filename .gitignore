@@ -15,3 +15,13 @@ venv/
 # Data
 data/sample/*.CSV
 data/sample/*.csv
+
+# Claude Code
+.claude/
+
+# Logs
+*.log
+
+# Env
+.env
+*.env
