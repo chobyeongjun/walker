@@ -13,5 +13,8 @@ bleak>=0.21.0
 # Numerical operations
 numpy>=1.21.0
 
+# CSV data analysis
+pandas>=1.5.0
+
 # Optional: Camera support (uncomment when needed)
 # opencv-python>=4.8.0

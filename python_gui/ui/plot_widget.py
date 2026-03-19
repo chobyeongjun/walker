@@ -26,8 +26,8 @@ from core.data_parser import WalkerData
 
 # PyQtGraph 설정 (단순화)
 pg.setConfigOptions(antialias=False, useOpenGL=False)
-pg.setConfigOption('background', '#0d0d0d')
-pg.setConfigOption('foreground', '#e0e0e0')
+pg.setConfigOption('background', '#13131A')
+pg.setConfigOption('foreground', '#94A3B8')
 
 
 # Constants
@@ -38,15 +38,15 @@ MAX_SCALE_FACTOR = 1.4
 
 
 class GCPIndicator(QWidget):
-    """GCP 원형 인디케이터"""
+    """GCP 원형 인디케이터 (QPainter circular gauge)"""
 
-    def __init__(self, label: str, color: str = "#00aaff", parent=None):
+    def __init__(self, label: str, color: str = "#4C9EFF", parent=None):
         super().__init__(parent)
         self._label = label
         self._color = QColor(color)
         self._value = 0.0
         self._bg_cache: Optional[QPixmap] = None
-        self.setFixedSize(80, 100)
+        self.setFixedSize(70, 88)
 
     def set_value(self, value: float):
         if value > 1:
@@ -67,42 +67,44 @@ class GCPIndicator(QWidget):
         painter.setRenderHint(QPainter.Antialiasing)
         margin = 4
         rect = (margin, margin, size - margin * 2, size - margin * 2)
-        painter.setPen(QPen(QColor("#3a3a3a"), 4))
+        painter.setPen(QPen(QColor(40, 40, 55), 5))
         painter.drawArc(*rect, 0, 360 * 16)
         painter.end()
 
     def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
 
-        label_height = 22
-        circle_size = min(self.width(), self.height() - label_height) - 8
-        x = (self.width() - circle_size) // 2
-        y = 4
+        cx, cy, r = self.width() // 2, 38, 28
 
-        self._ensure_bg_cache(circle_size)
+        self._ensure_bg_cache(r * 2 + 8)
         if self._bg_cache:
-            painter.drawPixmap(x, y, self._bg_cache)
+            p.drawPixmap(cx - r - 4, cy - r - 4, self._bg_cache)
 
-        margin = 4
-        rect = (x + margin, y + margin, circle_size - margin * 2, circle_size - margin * 2)
+        # Glow effect (3-layer soft glow)
+        span = int(-self._value * 360 * 16)
+        if self._value > 0.01:
+            for glow_expand, glow_alpha in [(6, 15), (4, 25), (2, 45)]:
+                gr = r + glow_expand
+                glow_color = QColor(self._color.red(), self._color.green(),
+                                    self._color.blue(), glow_alpha)
+                p.setPen(QPen(glow_color, 5, Qt.SolidLine, Qt.RoundCap))
+                p.drawArc(cx - gr, cy - gr, gr * 2, gr * 2, 90 * 16, span)
 
-        pen = QPen(self._color, 6)
-        pen.setCapStyle(Qt.RoundCap)
-        painter.setPen(pen)
-        span_angle = int(-self._value * 360 * 16)
-        painter.drawArc(*rect, 90 * 16, span_angle)
+        # Value arc
+        p.setPen(QPen(self._color, 5, Qt.SolidLine, Qt.RoundCap))
+        p.drawArc(cx - r, cy - r, r * 2, r * 2, 90 * 16, span)
 
-        painter.setPen(QColor("#ffffff"))
-        font = QFont("Arial", 14, QFont.Bold)
-        painter.setFont(font)
-        text = f"{self._value * 100:.0f}%"
-        painter.drawText(x, y, circle_size, circle_size, Qt.AlignCenter, text)
+        # Value text
+        p.setPen(self._color)
+        p.setFont(QFont("Inter", 14, QFont.Bold))
+        p.drawText(0, 20, self.width(), 36, Qt.AlignCenter, f"{int(self._value * 100)}")
 
-        painter.setPen(QColor("#aaaaaa"))
-        font = QFont("Arial", 10)
-        painter.setFont(font)
-        painter.drawText(0, circle_size + 4, self.width(), label_height, Qt.AlignCenter, self._label)
+        # Label
+        p.setPen(QColor("#64748B"))
+        p.setFont(QFont("Inter", 9, QFont.Bold))
+        p.drawText(0, 70, self.width(), 18, Qt.AlignCenter, self._label)
+        p.end()
 
 
 class TopBarWidget(QWidget):
@@ -115,85 +117,75 @@ class TopBarWidget(QWidget):
         self._init_ui()
 
     def _init_ui(self):
+        from ui.styles import C
         layout = QHBoxLayout(self)
         layout.setContentsMargins(6, 4, 6, 4)
         layout.setSpacing(8)
 
-        # File Logging - 고정 최소 너비로 안정적 배치
+        # File Logging
         file_frame = QFrame()
-        file_frame.setStyleSheet("QFrame { background-color: #1a1a1a; border-radius: 6px; border: 1px solid #333; }")
+        file_frame.setObjectName("GlassCard")
         file_layout = QHBoxLayout(file_frame)
         file_layout.setContentsMargins(8, 6, 8, 6)
         file_layout.setSpacing(6)
 
-        file_icon = QLabel("\U0001F4BE")
-        file_icon.setStyleSheet("border: none; font-size: 14px;")
-        file_icon.setFixedWidth(18)
-        file_layout.addWidget(file_icon)
-
-        file_label = QLabel("File:")
-        file_label.setStyleSheet("color: #b0b0b0; font-weight: bold; font-size: 11px; border: none;")
-        file_label.setFixedWidth(28)
+        file_label = QLabel("FILE")
+        file_label.setStyleSheet(
+            f"color:{C['muted']}; font-size:9px; font-weight:700; "
+            f"letter-spacing:1px; background:transparent; border:none;"
+        )
         file_layout.addWidget(file_label)
 
         self.filename_input = QLineEdit()
         self.filename_input.setPlaceholderText("(auto if empty)")
-        self.filename_input.setMaxLength(20)  # ★ 펌웨어 customFilename[32] - ".CSV"(4) - 여유(8) = 20자
+        self.filename_input.setMaxLength(20)
         self.filename_input.setMinimumWidth(100)
         self.filename_input.setMaximumWidth(160)
         self.filename_input.setFixedHeight(26)
-        self.filename_input.setStyleSheet("""
-            QLineEdit {
-                background-color: #252525; border: 1px solid #404040;
-                border-radius: 4px; padding: 3px 6px;
-                color: #e0e0e0; font-size: 11px;
-            }
-        """)
         file_layout.addWidget(self.filename_input, 1)
 
         self.save_btn = QPushButton("Save")
+        self.save_btn.setObjectName("AccentBtn")
         self.save_btn.setFixedSize(50, 26)
-        self.save_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #0ea5e9; color: white; font-weight: bold;
-                font-size: 11px; border-radius: 4px; border: none;
-            }
-            QPushButton:hover { background-color: #0284c7; }
-        """)
         self.save_btn.clicked.connect(self._on_save_clicked)
         file_layout.addWidget(self.save_btn)
 
         file_frame.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
         layout.addWidget(file_frame)
 
-        # Image - stretch=1로 가용 공간 채움
+        # Image
         self.image_frame = QFrame()
-        self.image_frame.setStyleSheet("QFrame { background-color: #1a1a1a; border-radius: 6px; border: 1px solid #333; }")
+        self.image_frame.setObjectName("GlassCard")
         image_layout = QVBoxLayout(self.image_frame)
         image_layout.setContentsMargins(6, 4, 6, 4)
 
         self.image_label = QLabel()
         self.image_label.setAlignment(Qt.AlignCenter)
-        self.image_label.setStyleSheet("color: #666; font-size: 11px; border: none;")
+        self.image_label.setStyleSheet(
+            f"color:{C['muted']}; font-size:11px; background:transparent; border:none;"
+        )
         self.image_label.setMinimumSize(100, 50)
         image_layout.addWidget(self.image_label)
 
         self.image_frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         layout.addWidget(self.image_frame, 1)
 
-        # GCP Indicators - 고정 너비
+        # GCP Indicators
         gcp_frame = QFrame()
-        gcp_frame.setStyleSheet("QFrame { background-color: #1a1a1a; border-radius: 6px; border: 1px solid #333; }")
+        gcp_frame.setObjectName("GlassCard")
         gcp_layout = QHBoxLayout(gcp_frame)
         gcp_layout.setContentsMargins(8, 4, 8, 4)
         gcp_layout.setSpacing(8)
 
         gcp_label = QLabel("GCP")
-        gcp_label.setStyleSheet("color: #b0b0b0; font-weight: bold; font-size: 11px; border: none;")
+        gcp_label.setStyleSheet(
+            f"color:{C['muted']}; font-size:9px; font-weight:700; "
+            f"letter-spacing:1px; background:transparent; border:none;"
+        )
         gcp_layout.addWidget(gcp_label)
 
-        self.gcp_left = GCPIndicator("Left", "#22d3ee")
-        self.gcp_right = GCPIndicator("Right", "#f472b6")
+        self.gcp_left = GCPIndicator("Left", C['teal'])
+        self.gcp_right = GCPIndicator("Right", C['pink'])
         gcp_layout.addWidget(self.gcp_left)
         gcp_layout.addWidget(self.gcp_right)
 
@@ -254,7 +246,7 @@ class SinglePlot(QWidget):
 
         # Y축 범위 컨트롤
         range_frame = QFrame()
-        range_frame.setStyleSheet("QFrame { background-color: #1a1a1a; border-radius: 4px; }")
+        range_frame.setObjectName("GlassCard")
         range_bar = QHBoxLayout(range_frame)
         range_bar.setContentsMargins(8, 4, 8, 4)
         range_bar.setSpacing(6)
@@ -276,14 +268,14 @@ class SinglePlot(QWidget):
         range_bar.addWidget(self.y_max_spin)
 
         self.apply_btn = QPushButton("Apply")
+        self.apply_btn.setObjectName("AccentBtn")
         self.apply_btn.setFixedWidth(60)
-        self.apply_btn.setStyleSheet("background-color: #3b82f6; color: white;")
         self.apply_btn.clicked.connect(self._apply_y_range)
         range_bar.addWidget(self.apply_btn)
 
         self.auto_btn = QPushButton("Auto")
+        self.auto_btn.setObjectName("SecondaryBtn")
         self.auto_btn.setFixedWidth(55)
-        self.auto_btn.setStyleSheet("background-color: #8b5cf6; color: white;")
         self.auto_btn.clicked.connect(self._auto_y_range)
         range_bar.addWidget(self.auto_btn)
 
@@ -356,8 +348,9 @@ class PlotTabWidget(QWidget):
         super().__init__(parent)
         self._mode = 0
         self._sample_count = 0
+        self._gcp_callback = None  # RealtimeMode에서 설정
 
-        # ★ 단순한 deque 버퍼 (lock 없음)
+        # 단순한 deque 버퍼 (lock 없음)
         self._buffers = self._init_buffers()
 
         self._init_ui()
@@ -376,10 +369,6 @@ class PlotTabWidget(QWidget):
         layout.setContentsMargins(5, 5, 5, 5)
         layout.setSpacing(5)
 
-        self.top_bar = TopBarWidget()
-        self.top_bar.save_requested.connect(self.save_requested.emit)
-        layout.addWidget(self.top_bar)
-
         self.tab_widget = QTabWidget()
         self._update_tab_style()
         layout.addWidget(self.tab_widget, 1)
@@ -387,12 +376,8 @@ class PlotTabWidget(QWidget):
         self._create_tabs()
 
     def _update_tab_style(self):
-        self.tab_widget.setStyleSheet("""
-            QTabWidget::pane { border: 1px solid #333; background-color: #0d0d0d; }
-            QTabBar::tab { background-color: #252525; color: #aaa; padding: 8px 16px; margin-right: 2px; border-top-left-radius: 4px; border-top-right-radius: 4px; }
-            QTabBar::tab:selected { background-color: #404040; color: #fff; }
-            QTabBar::tab:hover { background-color: #353535; }
-        """)
+        # 전역 QSS의 QTabWidget/QTabBar 규칙 활용 — 추가 오버라이드 불필요
+        pass
 
     def _create_tabs(self):
         self.tab_widget.clear()
@@ -485,10 +470,9 @@ class PlotTabWidget(QWidget):
         if len(b['time']) < 2:
             return
 
-        # GCP 업데이트 (set_value 내부에서 변화량 threshold 체크)
-        if b['l_gcp'] and b['r_gcp']:
-            self.top_bar.set_left_gcp(b['l_gcp'][-1])
-            self.top_bar.set_right_gcp(b['r_gcp'][-1])
+        # GCP 업데이트 (콜백 방식 - RealtimeMode에서 GCP 원형 게이지 직접 업데이트)
+        if b['l_gcp'] and b['r_gcp'] and self._gcp_callback:
+            self._gcp_callback(b['l_gcp'][-1], b['r_gcp'][-1])
 
         # 현재 탭만 업데이트
         current = self.tab_widget.currentIndex()
@@ -546,6 +530,10 @@ class PlotTabWidget(QWidget):
                 ("R Gyro", time_arr, self._to_array(b['r_gyro'])),
             ])
 
+    def set_gcp_callback(self, callback):
+        """Set callback for GCP updates: callback(l_gcp, r_gcp)"""
+        self._gcp_callback = callback
+
     def clear_data(self):
         self._buffers = self._init_buffers()
         self._sample_count = 0
@@ -557,8 +545,8 @@ class PlotTabWidget(QWidget):
                 for curve in plot._curves.values():
                     curve.setData(empty, empty)
 
-        self.top_bar.set_left_gcp(0.0)
-        self.top_bar.set_right_gcp(0.0)
+        if self._gcp_callback:
+            self._gcp_callback(0.0, 0.0)
 
     def get_latest_values(self) -> dict:
         b = self._buffers
